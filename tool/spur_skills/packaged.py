@@ -1,7 +1,6 @@
 from importlib import metadata
 from pathlib import Path
 from typing import cast
-
 from spur_skills.types import Skill
 
 

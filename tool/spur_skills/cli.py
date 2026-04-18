@@ -1,7 +1,5 @@
 import subprocess
-
 import typer
-
 from spur_skills.agents import all_agents, installed_agents, resolve_agents
 from spur_skills.packaged import load_packaged_skills
 from spur_skills.sync import (
