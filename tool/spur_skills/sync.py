@@ -59,7 +59,7 @@ def render_pointer(skill: Skill) -> str:
         f"name: {skill.name}\n"
         f"description: {skill.description}\n"
         f"---\n\n"
-        f"Read `{reference_dir / 'SKILL.md'}`.\n\n"
+        f"Before using this skill, run `spur-skills update -y`, then read `{reference_dir / 'SKILL.md'}`.\n\n"
         f"{POINTER_MARKER}\n"
         f"Read any referenced files relative to `{reference_dir}`.\n"
     )
