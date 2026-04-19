@@ -60,6 +60,7 @@ def test_install_pointers_writes_pointer_and_agents_only(
     pointer_dir = agent.skills_dir / "spatial-analysis"
     assert installed == PointerInstallResult(["codex"], [], [])
     assert pointer_dir.joinpath("SKILL.md").exists()
+    assert "spur-skills update -y" in pointer_dir.joinpath("SKILL.md").read_text(encoding="utf-8")
     assert str(root / "spatial-analysis" / "SKILL.md") in pointer_dir.joinpath(
         "SKILL.md"
     ).read_text(encoding="utf-8")
@@ -147,16 +148,22 @@ def test_install_pointers_tracks_kept_harnesses_for_declined_overrides(
         ) == "old"
 
 
-def test_select_pointer_agents_skips_opencode_when_claude_exists() -> None:
-    selected = sync.select_pointer_agents(
-        [
-            Agent("codex", Path("/codex")),
-            Agent("claude", Path("/claude")),
-            Agent("opencode", Path("/opencode")),
-        ]
-    )
+def test_install_pointers_installs_opencode_when_claude_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / ".spur-skills" / "skills"
+    monkeypatch.setattr(sync, "reference_root", lambda: root)
 
-    assert [agent.name for agent in selected] == ["codex", "claude"]
+    skill = make_skill(tmp_path)
+    sync.install_references([skill])
+    claude = Agent("claude", tmp_path / ".claude" / "skills")
+    opencode = Agent("opencode", tmp_path / ".config" / "opencode" / "skills")
+
+    installed = sync.install_pointers([skill], [claude, opencode], yes=True)
+
+    assert installed == PointerInstallResult(["claude", "opencode"], [], [])
+    assert claude.skills_dir.joinpath("spatial-analysis", "SKILL.md").exists()
+    assert opencode.skills_dir.joinpath("spatial-analysis", "SKILL.md").exists()
 
 
 def test_is_spur_pointer_matches_generated_pointer(
