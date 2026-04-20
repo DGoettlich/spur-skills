@@ -18,7 +18,19 @@ This repo contains
 
 ## Install
 
-Install the tool from PyPI (coming soon):
+To install the tool from PyPI, first install `uv` with:
+
+```bash
+# macOS/Linux:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell):
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+If you run into issues setting up `uv`, you may want to check the [uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
+
+Then, install `spur-skills` with:
 
 ```bash
 uv tool install spur-skills
@@ -29,19 +41,6 @@ Update tool and skills:
 
 ```bash
 spur-skills update
-```
-
-Uninstall `spur-skills` from all supported agent folders:
-
-```bash
-spur-skills uninstall
-uv tool uninstall spur-skills
-```
-
-Or only from selected agents:
-
-```bash
-spur-skills uninstall codex claude
 ```
 
 After install, you will see a short summary like this:
@@ -59,5 +58,5 @@ After install, you will see a short summary like this:
 - `codex`
 - `claude`
 - `hermes`
-- `agents`
 - `opencode`
+- other agents reading from `agents`
