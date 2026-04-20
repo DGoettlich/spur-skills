@@ -6,14 +6,27 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FAKE_HOME = REPO_ROOT / ".pycache" / "HOME"
-TOOL_BIN = FAKE_HOME / ".local" / "bin" / "spur-skills"
+TOOL_BIN_DIR = FAKE_HOME / ".local" / "bin"
+
+
+def installed_tool_bin() -> Path:
+    candidates = [
+        TOOL_BIN_DIR / "spur-skills.exe",
+        TOOL_BIN_DIR / "spur-skills",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    raise AssertionError(f"spur-skills was not installed in {TOOL_BIN_DIR}")
 
 
 def env() -> dict[str, str]:
     return os.environ | {
         "HOME": str(FAKE_HOME),
+        "USERPROFILE": str(FAKE_HOME),
         "XDG_CONFIG_HOME": str(FAKE_HOME / ".config"),
-        "PATH": f"{FAKE_HOME / '.local' / 'bin'}:{os.environ['PATH']}",
+        "UV_TOOL_BIN_DIR": str(TOOL_BIN_DIR),
+        "PATH": f"{TOOL_BIN_DIR}{os.pathsep}{os.environ['PATH']}",
     }
 
 
@@ -35,7 +48,7 @@ def reset_fake_home() -> None:
 
 def install_tool() -> None:
     run(["uv", "tool", "install", "--reinstall", "--no-cache", "."])
-    assert TOOL_BIN.exists()
+    assert installed_tool_bin().exists()
 
 
 def scaffold_agents(*names: str) -> None:
@@ -51,7 +64,7 @@ def test_real_install_writes_shared_copy_and_pointers() -> None:
     scaffold_agents("codex", "hermes", "opencode")
     install_tool()
 
-    result = run([str(TOOL_BIN), "install", "--yes"])
+    result = run([str(installed_tool_bin()), "install", "--yes"])
 
     # fmt: off
     assert "Installed skills: spatial-analysis" in result.stdout
@@ -73,13 +86,13 @@ def test_real_uninstall_removes_only_spur_managed_entries() -> None:
     reset_fake_home()
     scaffold_agents("codex")
     install_tool()
-    run([str(TOOL_BIN), "install", "--yes"])
+    run([str(installed_tool_bin()), "install", "--yes"])
 
     other_skill = FAKE_HOME / ".codex" / "skills" / "other-skill"
     other_skill.mkdir(parents=True)
     other_skill.joinpath("SKILL.md").write_text("keep me", encoding="utf-8")
 
-    result = run([str(TOOL_BIN), "uninstall"])
+    result = run([str(installed_tool_bin()), "uninstall"])
 
     assert "Removed skills: spatial-analysis" in result.stdout
     assert not (FAKE_HOME / ".spur-skills").exists()
