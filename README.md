@@ -16,9 +16,21 @@ This repo contains
 1. installable skills for the spur-family of packages.
 2. A `uv tool` for installing, updating, and uninstalling the skills.
 
+## Quick start
+
+To get started, just point your agent at the install section:
+
+```bash
+codex --dangerously-bypass-approvals-and-sandbox "Install spur-skills by following https://github.com/spatial-spur/spur-skills#install"
+```
+
+```bash
+claude --dangerously-skip-permissions "Install spur-skills by following https://github.com/spatial-spur/spur-skills#install"
+```
+
 ## Install
 
-To install the tool from PyPI, first install `uv` with:
+If you haven't already, install `uv` with:
 
 ```bash
 # macOS/Linux:
@@ -30,7 +42,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 If you run into issues setting up `uv`, you may want to check the [uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
-Then, install `spur-skills` with:
+Then, install `spur-skills` from PyPI with:
 
 ```bash
 uv tool install spur-skills
