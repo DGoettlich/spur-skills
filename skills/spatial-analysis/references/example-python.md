@@ -2,57 +2,106 @@
 
 Use this file to implement the Becker, Boll, and Voth (2026) workflow in Python.
 
-`spur-python` handles the tests, transformations, and half-life step. `scpc-python` is still under development, so the inference step is not yet available in Python.
+`spur-python` handles the SPUR diagnostics, transformations, half-life step, and
+the full `spur()` pipeline. `scpc-python` handles SCPC inference on fitted
+models.
 
-The main Python functions are:
+This reference shows both entry paths:
 
-- `spurtest()`
-- `spurtransform()`
-- `spurhalflife()`
+- a pipeline wrapper when you want the full workflow in one call
+- individual functions when you want only selected diagnostics,
+  transformations, or the final inference step
 
-This file therefore covers the SPUR side of the workflow in Python and stops before the SCPC inference step.
+For the full API, see:
+
+- <https://spatial-spur.github.io/spur-python/>
+- <https://spatial-spur.github.io/scpc-python/>
 
 ## Install
 
-If you want to run this example, install `spur-python` first.
+These install snippets point to the latest released versions on PyPI. The
+example code below follows the current package API on `main`.
 
 ```bash
 uv venv --python 3.11
-uv pip install "git+https://github.com/huggingbeard/spur-python.git@v0.1.0"
+uv pip install spur-python
 ```
 
-`scpc-python` is still under development and is not ready for the inference step yet.
+## Worked Example: `am ~ gini + fracblack`
 
-## Setup
-
-This example uses the built-in Chetty data that ships with `spur-python`.
+This example uses the packaged Chetty data from `spur-python`.
 
 ```python
-from spur import load_chetty_data, spurhalflife, spurtest, spurtransform
+import spur
 
-df = load_chetty_data()
+df = spur.load_chetty_data()
 
-df = df[~df["state"].isin(["AK", "HI"])][["am", "gini", "fracblack", "lat", "lon"]]
-df = df.dropna(subset=["am", "gini", "fracblack", "lat", "lon"]).copy()
+df = df[~df["state"].isin(["AK", "HI"])][
+    ["am", "gini", "fracblack", "lat", "lon"]
+].copy()
+
+df = df.dropna(subset=["am", "gini", "fracblack", "lat", "lon"])
 ```
 
-## Step 1: Test The Dependent Variable
+### Example with pipeline wrapper
+
+If you do not want to run each test and branch by hand, use the top-level
+`spur()` wrapper.
 
 ```python
-i0_y = spurtest(
+import spur
+
+pipeline = spur(
+    "am ~ gini + fracblack",
     df,
-    "i0",
+    lon="lon",
+    lat="lat",
+    q=15,
+    nrep=100000,
+    seed=42,
+    avc=0.03,
+)
+
+print(pipeline.summary())
+print(pipeline.tests.i0.summary())
+print(pipeline.fits.levels.scpc.scpcstats)
+print(pipeline.fits.transformed.scpc.scpcstats)
+```
+
+`pipeline.tests` contains the four SPUR diagnostics, and `pipeline.fits`
+contains both the levels and transformed regression branches together with their
+SCPC results. This wrapper fits OLS internally. If your final specification is
+IV or uses absorbed fixed effects, use the manual path and call `scpc()` on the
+fitted IV/FE model yourself.
+
+### Example with individual test functions
+
+Use the individual functions below if you want only selected parts of the
+workflow.
+
+#### Step 1: test the dependent variable
+
+```python
+import spur
+
+i0_y = spur.spurtest(
     "am",
-    ["lat", "lon"],
+    df,
+    test="i0",
+    lon="lon",
+    lat="lat",
+    q=15,
     nrep=100000,
     seed=42,
 )
 
-i1_y = spurtest(
-    df,
-    "i1",
+i1_y = spur.spurtest(
     "am",
-    ["lat", "lon"],
+    df,
+    test="i1",
+    lon="lon",
+    lat="lat",
+    q=15,
     nrep=100000,
     seed=42,
 )
@@ -61,41 +110,129 @@ print(i0_y.summary())
 print(i1_y.summary())
 ```
 
-Use the decision rule from `SKILL.md` to decide which branch to follow next.
+Use the practitioner-guide decision rule to choose whether to stay in levels or
+transform the regression.
 
-## Step 2A: Levels Branch
-
-If the decision rule in `SKILL.md` tells you to stay in levels, there is nothing to transform in Python.
-
-The workflow stops here for now, because `scpc-python` is still under development and the inference step is not yet available in Python.
-
-## Step 2B: Transformed Branch
-
-If the decision rule in `SKILL.md` tells you to transform the regression, transform the dependent and independent variables together.
+#### Step 2A: levels branch
 
 ```python
-transformed = spurtransform(
+import statsmodels.formula.api as smf
+import scpc
+
+fit_levels = smf.ols("am ~ gini + fracblack", data=df).fit()
+
+scpc_levels = scpc(
+    fit_levels,
+    data=df,
+    lon="lon",
+    lat="lat",
+    cvs=True,
+)
+
+print(scpc_levels.scpcstats)
+```
+
+#### Step 2B: transformed branch
+
+```python
+import statsmodels.formula.api as smf
+import scpc
+import spur
+
+transformed = spur.spurtransform(
+    "am ~ gini + fracblack",
     df,
-    ["am", "gini", "fracblack"],
-    ["lat", "lon"],
-    method="lbmgls",
+    lon="lon",
+    lat="lat",
+    transformation="lbmgls",
     prefix="h_",
 )
 
-transformed[["h_am", "h_gini", "h_fracblack"]].head()
+fit_transformed = smf.ols(
+    "h_am ~ h_gini + h_fracblack",
+    data=transformed,
+).fit()
+
+scpc_transformed = scpc(
+    fit_transformed,
+    data=transformed,
+    lon="lon",
+    lat="lat",
+    cvs=True,
+)
+
+print(scpc_transformed.scpcstats)
 ```
 
-At this point the transformed variables are ready, but the inference step is still not available in Python because `scpc-python` is under development.
+## SCPC-only: IV / FE example
+
+`spur()` currently fits OLS internally. If your final regression is IV or uses
+absorbed fixed effects, run the SPUR diagnostics and any transformation
+manually, then fit the IV/FE model yourself and pass that fitted model to
+`scpc()`.
+
+```python
+import numpy as np
+import pandas as pd
+import pyfixest as pf
+import scpc
+
+rng = np.random.default_rng(42)
+n_fe = 20
+t_per_fe = 5
+n = n_fe * t_per_fe
+
+fe = np.repeat(np.arange(n_fe), t_per_fe)
+s_1 = rng.normal(size=n)
+s_2 = rng.normal(size=n)
+z = rng.normal(size=n)
+w = rng.normal(size=n)
+u = rng.normal(size=n)
+x = 0.8 * z + 0.3 * u + rng.normal(scale=0.5, size=n)
+fe_effect = rng.normal(size=n_fe)[fe]
+y = 1.0 + 0.5 * w + 1.2 * x + fe_effect + u
+
+iv_df = pd.DataFrame(
+    {
+        "y": y,
+        "x": x,
+        "z": z,
+        "w": w,
+        "fe": fe,
+        "s_1": s_1,
+        "s_2": s_2,
+    }
+)
+
+fit_iv = pf.feols("y ~ w | fe | x ~ z", data=iv_df)
+
+out_iv = scpc(
+    fit_iv,
+    data=iv_df,
+    coords_euclidean=["s_1", "s_2"],
+    cvs=True,
+)
+
+print(out_iv.scpcstats)
+```
+
+If the SPUR decision rule tells you to transform the specification first,
+transform the outcome, regressors, and instrument together and then fit the IV
+model on those transformed variables before calling `scpc()`.
 
 ## Optional: Half-Life
 
 Use this only when persistence itself is part of the question.
 
 ```python
-hl = spurhalflife(
-    df,
+import spur
+
+hl = spur.spurhalflife(
     "am",
-    ["lat", "lon"],
+    df,
+    lon="lon",
+    lat="lat",
+    q=15,
     nrep=100000,
     seed=42,
 )
@@ -105,8 +242,52 @@ print(hl.summary())
 
 ## Practical Notes
 
-- `coord_cols` should be passed as `["lat", "lon"]` when you work with latitude and longitude.
-- `spurtransform()` defaults to `method="lbmgls"` and `prefix="d_"`, so this example only sets `prefix="h_"` explicitly to match the R and Stata references.
-- `nrep=100000` matches the package default and is a good choice for real analysis.
-- `scpc-python` is still under development, so this reference does not show a Python inference step.
-- Do not present ordinary Python regression standard errors as a substitute for SCPC inference.
+- Use `lon` and `lat` for geographic coordinates. Use `coords_euclidean` only
+  for planar coordinates.
+- `spurtransform()` defaults to `transformation="lbmgls"` and `prefix="h_"` in
+  the full `spur()` pipeline. The manual example writes both out explicitly.
+- `scpc-python` now supports fitted `statsmodels` models and `pyfixest` models,
+  including IV. This example keeps the regression step on the simple
+  `statsmodels` path.
+- IV and absorbed-FE estimation are currently SCPC-only concerns in Python. The
+  `spur()` wrapper itself still fits OLS internally.
+- Do not substitute ordinary regression standard errors for SCPC inference.
+
+## Parameter Reference
+
+This is a compact guide to the arguments used above. For full signatures and
+return objects, see the package docs linked at the top.
+
+- `formula`: the model specification. Use a two-sided formula such as
+  `"am ~ gini + fracblack"` when regressors matter for the SPUR residual tests,
+  transformation step, or final regression.
+- `data`: the DataFrame containing both the model variables and the coordinate
+  columns used by SPUR and SCPC.
+- `lon`, `lat`: use these when your coordinates are geographic and distances
+  should be treated as great-circle distances on the earth.
+- `coords_euclidean`: use this instead of `lon` / `lat` when coordinates live
+  in a planar system such as projected meters or x/y grid coordinates.
+- `q`: the number of low-frequency spatial averages used in the SPUR tests.
+  Larger values let the diagnostics look at richer low-frequency dependence, but
+  increase computation.
+- `nrep`: the number of Monte Carlo draws used in SPUR tests and half-life
+  intervals. Larger values reduce simulation noise.
+- `seed`: the random seed for the simulation-based SPUR steps, so results can
+  be reproduced.
+- `transformation`: the spatial transformation applied by `spurtransform()`.
+  `lbmgls` is the default empirical branch shown here.
+- `prefix`: the prefix used for transformed variables created by
+  `spurtransform()`, such as `h_am` and `h_gini`.
+- `avc`: the upper bound on average pairwise correlation assumed by SCPC.
+  Smaller values impose a stricter dependence bound and can make inference more
+  conservative and computation harder.
+- `uncond`: request unconditional SCPC inference. Conditional SCPC adjusts
+  critical values using the realized regressors; unconditional SCPC does not,
+  and is useful when the conditional adjustment is unavailable or when you want
+  the unconditional procedure explicitly.
+- `cvs`: store additional SCPC critical values beyond the default 95% interval
+  output, which is useful when you want several confidence levels from one run.
+- `spur()`: the convenience wrapper that runs the full SPUR workflow and then
+  fits OLS internally for the final SCPC step. If your final regression is IV
+  or uses absorbed fixed effects, call `scpc()` directly on the fitted model
+  instead.
