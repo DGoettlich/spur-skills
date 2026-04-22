@@ -1,4 +1,4 @@
 title: spur-skills
 nav:
-  - index.md
-  - how-it-works.md
+  - Overview: index.md
+  - How it works: how-it-works.md
