@@ -11,7 +11,7 @@ This repo contains
 1. installable skills for the spur-family of packages.
 2. A `uv tool` for installing, updating, and uninstalling the skills.
 
-**Citation:** If you use spur-skills, please cite `bbv2026`. See [CITATION.cff](CITATION.cff) for copyable citation metadata.
+**Citation:** If you use spur-skills, please cite Becker et al. 2026. See [CITATION.bib](CITATION.bib) for the BibTeX entry.
 
 ## Quick start
 
